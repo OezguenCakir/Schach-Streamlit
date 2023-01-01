@@ -27,7 +27,7 @@ from pyxlsb import open_workbook as open_xlsb
 if "button_clicked" not in st.session_state:    
     st.session_state.button_clicked = False
 
-os.chdir('/Users/ozguncakir/Schach_Streamlit/Schach_Streamlit')
+os.chdir('/Users/ozguncakir/Repositories/Schach-Streamlit')
 
 
 def callback():
