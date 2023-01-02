@@ -8,7 +8,7 @@ import re
 import os.path
 import pathlib
 import logging
-from datetime import datetime
+from datetime import date, datetime
 import time
 import traceback
 import numpy as np
@@ -23,6 +23,7 @@ from pandas.api.types import (
 )
 from io import BytesIO
 from pyxlsb import open_workbook as open_xlsb
+import pytz
 
 if "button_clicked" not in st.session_state:    
     st.session_state.button_clicked = False
@@ -145,13 +146,15 @@ def datenbearbeitung(df):
     df['End-Datum'] = pd.to_datetime(df['EndDate'] + ' ' + df['EndTime'])
     df['Start-Datum'] = pd.to_datetime(df['UTCDate'] + ' ' + df['StartTime'])
     df['Dauer'] = df['End-Datum'] - df['Start-Datum']
-    df['Jahr'] = pd.DatetimeIndex(df['Date']).year
     df['Dauer in Minuten'] = round(df['Dauer'] / datetime.timedelta(minutes=1),2)
+    df['Jahr'] = pd.DatetimeIndex(df['Date']).year
     if df.get('variant') == None:
         df['Variante'] = 'Classic'
     else: df['Variante'] = df.get('Variant', 'leer').replace("leer","Classic").fillna("Classic")
     df['Anzahl Züge'] = np.ceil(df.moves.apply(len)/2).astype('int')
     df['Uhrzeit'] = pd.to_datetime(df.StartTime, format="%H:%M:%S")
+    #pd.to_datetime(df['StartTime']).dt.strftime('%H:%M:%S') 
+    df['Spielzüge'] = df['moves']
 
     conditions = [
         (df['Result'] == '1/2-1/2'),
@@ -160,7 +163,6 @@ def datenbearbeitung(df):
         ]
     values = [0.5, 0, 1]
     values_black = [0.5, 1, 0]
-
     df['Ausgang_kurz'] = np.where(df['meine Farbe']== 'Weiß', np.select(conditions, values), np.select(conditions, values_black))
     
 
@@ -182,6 +184,7 @@ def datenbearbeitung(df):
         "1/86400":"1 Tag"
     }	
     df['Zeit']= df['TimeControl'].astype(str).map(time_control_mapping)
+
     game_type_mapping = {
         "600":"Schnellschach",
         "60":"Bullet",
@@ -199,14 +202,14 @@ def datenbearbeitung(df):
         "900+10":"Schnellschach",
         "1/86400":"Täglich"
     }
-    df['Spiel-Art'] = df['TimeControl'].astype(str).map(game_type_mapping)
+    df['Spiel-Art'] = df['TimeControl'].astype(str).map(game_type_mapping).astype('category')
 
     game_result_mapping = {
         1:"gewonnen",
         0:"verloren",
         0.5:"unentschieden"
     }
-    df['Ausgang'] = df['Ausgang_kurz'].map(game_result_mapping)
+    df['Ausgang'] = df['Ausgang_kurz'].map(game_result_mapping).astype('category')
 
     conditions = [
         df.Termination.str.contains("won by resignation"),
@@ -221,16 +224,12 @@ def datenbearbeitung(df):
         df.Termination.str.contains("drawn by 50-move rule"),
         df.Termination.str.contains("won by checking the opponent king for the 3rd time")
         ]
-
     values = ['Aufgabe', 'Schachmatt', 'Verlassen', 'Zeitüberschreitung', 'Vereinbarung', 'Stellungswiederholung', 'Nicht genügend Material', 'Patt', 'Zeitüberschreitung gegen unzureichendes Material', '50 Züge Regel', '3 Mal Schach-gestellt']
     df['Ausgang-Grund'] = np.select(conditions, values)
-
-    df['Event'] = df.Event.astype('category')
-    df['Spiel-Art'] = df['Spiel-Art'].astype('category')
-    df['Ausgang'] = df.Ausgang.astype('category')
     df['Ausgang-Grund'] = df['Ausgang-Grund'].astype('category')
 
-
+    df['Event'] = df.Event.astype('category')
+    
     from datetime import datetime
     df['Wochentag Zahl'] = df['Start-Datum'].apply(lambda time: time.dayofweek)
     wochentag_mapping = {
@@ -244,13 +243,11 @@ def datenbearbeitung(df):
         7:"2 | 1"
     }	
     df['Wochentag']= df['Wochentag Zahl'].map(wochentag_mapping)
-    df['Start-Datum'] = pd.to_datetime(df['Start-Datum'])
-    df['End-Datum'] = pd.to_datetime(df['End-Datum'])
 
     df = df[[
         'Event', 'Spiel-Art','Variante', 'Zeit', 
         'Start-Datum', 'End-Datum', 'Dauer in Minuten',
-        'Ausgang', 'Ausgang-Grund', 'meine Farbe', 'mein Elo', 'Gegner Elo', 'Gegner-Name', 'Anzahl Züge', 'ECO', 'Uhrzeit', 'Wochentag']]
+        'Ausgang', 'Ausgang-Grund', 'meine Farbe', 'mein Elo', 'Gegner Elo', 'Gegner-Name', 'Anzahl Züge', 'ECO', 'Uhrzeit', 'Wochentag', 'Spielzüge']]
     df = df.sort_values('Start-Datum', ascending=False).reset_index(drop=True)
     df.index = np.arange(1, len(df) + 1)
     return df
@@ -394,6 +391,7 @@ if submit_button or st.session_state.button_clicked:
 else:
     st.subheader('Oder schaue dir meine Daten an')
     username = 'oezguen'
+    text_input = 'oezguen'
     df = pd.read_json('my_chess_data.json')
     df = datenbearbeitung(df)
 
@@ -458,16 +456,6 @@ with st.sidebar:
         )
 
 
-anzahl_spiele = len(df.index)
-anzahl_spiele_gewonnen = len( df.loc[(df.Ausgang == "gewonnen")] )
-anzahl_spiele_verloren = len( df.loc[(df.Ausgang == "verloren")] )
-anzahl_spiele_unentschieden = len( df.loc[(df.Ausgang == "unentschieden")] )
-
-quote_spiele_gewonnen = "{:.0%}".format(anzahl_spiele_gewonnen / anzahl_spiele)
-quote_spiele_verloren = "{:.0%}".format(anzahl_spiele_verloren / anzahl_spiele)
-quote_spiele_unentschieden = "{:.0%}".format(anzahl_spiele_unentschieden / anzahl_spiele)
-
-
 url = "https://api.chess.com/pub/player/" + username
 data = json.loads(urllib.request.urlopen(url).read())
 col1, col2 = st.columns([1,5])
@@ -479,9 +467,13 @@ else:
 col1.image(profile_pic, width=100)
 col2.write("[" + data.get('username') + "](" + data.get('url') + ")  \n" + data.get('name'))
 col2.caption("Follower: " + str(data.get('followers')))
+joined_delta = date.today() - date.fromtimestamp(data.get('joined'))
+last_online_delta = date.today() - date.fromtimestamp(data.get('last_online'))
 col2.caption(
-    "Zuletzt online am " + time.strftime('%d.%m.%Y um %H:%M:%S', time.localtime(data.get('last_online'))) + "  \n" + 
-    "Registriert am " + time.strftime('%d.%m.%Y um %H:%M:%S', time.localtime(data.get('joined')))
+    "Zuletzt online am " + time.strftime('%d.%m.%Y um %H:%M:%S', time.localtime(data.get('last_online'))) + 
+     " *- vor *" + str(round(last_online_delta.days,1)).replace(".",",") + '* Tagen*' + "  \n" + 
+    "Registriert am " + time.strftime('%d.%m.%Y um %H:%M:%S', time.localtime(data.get('joined'))) +
+    " *- vor *" + str(round(joined_delta.days/365.25,1)).replace(".",",") + '* Jahren*'
     )
 
 st.subheader("Der Datensatz")
@@ -498,10 +490,22 @@ st.dataframe(df.describe().applymap(lambda x: f"{x:0.2f}"))
 st.subheader('Anzahl Spiele über die Jahre')
 
 col1, col2, col3, col4 = st.columns(4)
-col1.metric('Anzahl Spiele insgesamt', anzahl_spiele)
-col2.metric('gewonnen', quote_spiele_gewonnen)
-col3.metric('unentschieden', quote_spiele_unentschieden)
-col4.metric('verloren', quote_spiele_verloren)
+col1.metric(
+    'Anzahl Spiele insgesamt',
+    len(df.index)
+    )
+col2.metric(
+    'gewonnen',
+    "{:.0%}".format(len(df.loc[(df.Ausgang == "gewonnen")]) / len(df.index))
+    )
+col3.metric(
+    'unentschieden',
+    "{:.0%}".format(len(df.loc[(df.Ausgang == "unentschieden")]) / len(df.index))
+    )
+col4.metric(
+    'verloren',
+    "{:.0%}".format(len(df.loc[(df.Ausgang == "verloren")]) / len(df.index))
+    )
 
 angezeigteWerte = st.radio(
     "Angezeigte Werte",
@@ -535,6 +539,26 @@ st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
 
 st.subheader('Wann ich spiele')
 
+col1, col2, col3, col4 = st.columns(4)
+col1.metric(
+    label='Tage seit erstem Spiel',
+    value= (max(df['Start-Datum'])-min(df['Start-Datum'])).days
+)
+
+col2.metric(
+    label='Tage mit min. einem Spiel',
+    value= "{:.0%}".format(int( len( pd.to_datetime(df['Start-Datum']).apply(lambda x: x.date()).unique() ) ) / (max(df['Start-Datum'])-min(df['Start-Datum'])).days)
+)
+
+col3.metric(
+    label='Spiele/Tag',
+    value= str( round( len(df) / (max(df['Start-Datum'])-min(df['Start-Datum'])).days , 2)).replace('.',',')
+)
+
+col4.metric(
+    label='Spiele/Tag (min. ein Spiel)',
+    value= str( round(len(df) / int( len( pd.to_datetime(df['Start-Datum']).apply(lambda x: x.date()).unique() ) ), 2)).replace('.',',')
+)
 
 fig = px.histogram(
     df, 
@@ -790,3 +814,9 @@ fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
 # fig.update_yaxes(visible=False)
 
 st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
+
+
+st.subheader('Gespielte Eröffnungen')
+
+df_eco = df
+st.write(df.groupby(['ECO', 'meine Farbe'])['ECO'].agg(['count']).sort_values(by='count', ascending=False))

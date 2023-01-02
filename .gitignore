@@ -132,3 +132,4 @@ dmypy.json
 data/
 .xlsx
 test.ipynb
+.DS_Store
