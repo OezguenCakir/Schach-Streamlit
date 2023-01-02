@@ -1,8 +1,7 @@
-# Schach Streamlit
+# ♟️ Schach Streamlit
 
- - Mein Datenabzug aus Chess.com - `my_chess_data.json` aus `datenabzug.ipynb`
+Eine App um Daten aus Chess.com auszuwerten. Standardmäßig wird mein gecachter Datensatz angezeigt, aber ein anderes Profil kann auch ausgewertet werden.
+ - Nutzung der [Published-Data API](https://www.chess.com/news/view/published-data-api#pubapi-endpoint-country-profile) von Chess.com
  - Aufbau der Streamlit-App - `main.py`
-
- - Für Kombination der PGN-Dateien zur JSON-Datei, siehe [JonathanCauchi/PGN-to-JSON-Parser](https://github.com/JonathanCauchi/PGN-to-JSON-Parser)
-DIES IST EIN PROJEKT IN ARBEIT
- - siehe [Chess.com API](https://www.chess.com/news/view/published-data-api#pubapi-endpoint-country-profile)
+ - Mein Datenabzug aus Chess.com - `my_chess_data.json` aus `datenabzug.ipynb`
+ - `requirements.txt` für Deployment auf Streamlit
