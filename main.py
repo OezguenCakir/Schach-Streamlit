@@ -1,17 +1,11 @@
-import os
 import pandas as pd
-import chess.pgn
 import urllib
 import urllib.request
 import requests
 import json
-import re
 import os.path
-import pathlib
-import logging
 from datetime import date, datetime
 import time
-import traceback
 import numpy as np
 import streamlit as st
 import plotly.express as px
@@ -24,7 +18,7 @@ from pandas.api.types import (
 )
 from io import BytesIO
 from pyxlsb import open_workbook as open_xlsb
-import pytz
+
 
 
 if "button_clicked" not in st.session_state:    
@@ -48,6 +42,8 @@ def datenziehung(username):
     archivesList = archives.split("\",\"" + baseUrl)
     archivesList[len(archivesList)-1] = archivesList[len(archivesList)-1].rstrip("\"]}")
     df_list = []
+    p = st.empty()
+    progressbar = st.progress(0)
     for i in range(len(archivesList)-1):
             url = baseUrl + archivesList[i+1]
             # Make an HTTP request to the URL
@@ -61,6 +57,9 @@ def datenziehung(username):
 
             # Convert the list of records into a dataframe and append it to the list
             df_list.append(pd.DataFrame.from_records(records))
+            p.caption(url + " wird gespeichert")
+            i = i+ 1
+            progressbar.progress( (i+1)/len(archivesList) )
 
     # Concatenate all the dataframes into a single dataframe
     df = pd.concat(df_list) 
@@ -156,7 +155,7 @@ def datenbearbeitung(df):
     }	
     
     df['Zeit']= df['TimeControl'].astype(str).map(time_control_mapping)
-
+    import datetime
     df['End-Datum'] = df['EndTime'].apply(datetime.datetime.fromtimestamp)
 
     df['Datum'] = df['End-Datum'].apply(lambda x: x.date())
@@ -424,7 +423,7 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
-st.title('♟️ Chess.com Profil-Analyse')
+st.title('♟️ Chess.com Profil-Auswertung')
 
 
 with st.form(key='my_form'):
@@ -433,20 +432,13 @@ with st.form(key='my_form'):
 if submit_button or st.session_state.button_clicked:
     username = text_input.lower()
 
-    # Datenziehung
-    st.markdown('**Monatliche Datenstände aus Chess.com werden als PGN-Dateien gespeichert**')  
-    datenziehung(username)    
+    st.markdown('**Daten aus Chess.com werden gespeichert**')  
+    df = datenziehung(username)
            
     st.success ("Alle Dateien wurden gespeichert ✅")
-    
-    # Datenzusammenführung
-    st.markdown("**Jetzt werden alle Spiele aus den Dateien zusammengeführt**")  
-    
-    df = datenbearbeitung()
-    st.success('Die Zusammenführung der Dateien ist fertig ✅')
+    df = datenbearbeitung(df)
 
     st.text('')
-    st.info('So... und jetzt geht es los  \n Falls du einen neuen Namen eingeben willst, musst du den Cache refreshen (drücke `C`)')
 else:
     st.subheader('Oder schaue dir meine Daten an')
     username = 'oezguen'
