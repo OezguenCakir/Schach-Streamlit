@@ -133,3 +133,7 @@ data/
 .xlsx
 test.ipynb
 .DS_Store
+secrets.toml
+.streamlit
+test2.ipynb
+output.xlsx

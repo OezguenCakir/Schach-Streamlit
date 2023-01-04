@@ -25,6 +25,7 @@ from io import BytesIO
 from pyxlsb import open_workbook as open_xlsb
 import pytz
 
+
 if "button_clicked" not in st.session_state:    
     st.session_state.button_clicked = False
 
@@ -644,33 +645,12 @@ except Exception:
 
 col1, col2, col3, col4 = st.columns(4)
 
-col1.metric(
-    label = 'aktueller Elo', 
-    value = letzter_elo,
-    delta = elo_delta,
-    help= 'Das Delta wird zu den letzten 15 Spielen gebildet'
-    )
+col1.metric( label = 'aktueller Elo', value = letzter_elo, delta = elo_delta, help= 'Das Delta wird zu den letzten 15 Spielen gebildet' )
 
-col2.metric(
-    label= 'höchster Elo',
-    value= max_elo,
-    delta= max_delta,
-    help= 'Das Delta wird zum aktuellen Elo gebildet'
-)
+col2.metric( label= 'höchster Elo', value= max_elo, delta= max_delta, help= 'Das Delta wird zum aktuellen Elo gebildet' )
 
-col3.metric(
-    label= 'tiefster Elo',
-    value= min_elo,
-    delta= min_delta,
-    help= 'Das Delta wird zum aktuellen Elo gebildet'
-)
-
-col4.metric(
-    label= 'Ø Elo',
-    value= avg_elo,
-    delta= "{:.0%}".format( (letzter_elo - avg_elo ) / avg_elo ),
-    help= 'Das Delta wird zum aktuellen Elo gebildet'
-)
+col3.metric( label= 'tiefster Elo', value= min_elo, delta= min_delta, help= 'Das Delta wird zum aktuellen Elo gebildet' )
+col4.metric( label= 'Ø Elo', value= avg_elo, delta= "{:.0%}".format( (letzter_elo - avg_elo ) / avg_elo ), help= 'Das Delta wird zum aktuellen Elo gebildet')
 
 
 
@@ -820,3 +800,6 @@ st.subheader('Gespielte Eröffnungen')
 
 df_eco = df
 st.write(df.groupby(['ECO', 'meine Farbe'])['ECO'].agg(['count']).sort_values(by='count', ascending=False))
+
+
+st.write(df.columns)
