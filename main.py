@@ -20,17 +20,14 @@ from io import BytesIO
 from pyxlsb import open_workbook as open_xlsb
 
 
-
 if "button_clicked" not in st.session_state:    
     st.session_state.button_clicked = False
-
 
 def callback():
     # Button wurde geklickt
     st.session_state.button_clicked = True
 
-
-@st.cache(suppress_st_warning=True, show_spinner=False)
+@st.cache(suppress_st_warning=True, show_spinner=False, allow_output_mutation=True)
 def datenziehung(username):
     # Use of the API to download monthly archives
     baseUrl = "https://api.chess.com/pub/player/" + username + "/games/"
@@ -64,7 +61,6 @@ def datenziehung(username):
     # Concatenate all the dataframes into a single dataframe
     df = pd.concat(df_list) 
     return df
-
 
 @st.cache(suppress_st_warning=True, show_spinner=False)
 def datenbearbeitung(df):
@@ -160,7 +156,9 @@ def datenbearbeitung(df):
 
     df['Datum'] = df['End-Datum'].apply(lambda x: x.date())
 
-    df['Uhrzeit'] = df['End-Datum'].apply(lambda x: x.time())
+    df['Uhrzeit'] = pd.to_datetime(df['End-Datum'], format="%H:%M:%S").dt.strftime("%H:%M:%S")
+    #df['End-Datum'].apply(lambda x: x.time())
+    
     
     df['Meine Genauigkeit'] = np.where(
         df.accuracies.isna(),
@@ -299,15 +297,16 @@ def datenbearbeitung(df):
 
 
     df = df[[
-        'Datum','Uhrzeit','Spiel-Art', 'Zeit', 'Variante', 'Bewertet',
+        'Datum','Uhrzeit','Wochentag', 'Spiel-Art', 'Zeit', 'Variante', 'Bewertet',
         'Ausgang', 'Ausgang-Grund',
         'meine Farbe', 'mein Elo', 'Gegner Elo', 'Gegner-Name',
         'Meine Genauigkeit', 'Gegner Genauigkeit', 'Link'
     ]]
 
     df = df.sort_values('Datum', ascending=False).reset_index(drop=True)
-    return df
+    df.index = np.arange(1, len(df) + 1)
 
+    return df
 
 def df_to_excel(df):
     output = BytesIO()
@@ -419,10 +418,6 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
 
 
-
-
-
-
 st.title('♟️ Chess.com Profil-Auswertung')
 
 
@@ -437,14 +432,20 @@ if submit_button or st.session_state.button_clicked:
            
     st.success ("Alle Dateien wurden gespeichert ✅")
     df = datenbearbeitung(df)
-
     st.text('')
+    
 else:
     st.subheader('Oder schaue dir meine Daten an')
     username = 'oezguen'
     text_input = 'oezguen'
-    df = pd.read_csv('mein_datenabzug.csv')
-
+    df = pd.read_csv('meine_daten.csv')
+    df.index = np.arange(1, len(df) + 1)
+    df = df[[
+        'Datum','Uhrzeit','Wochentag', 'Spiel-Art', 'Zeit', 'Variante', 'Bewertet',
+        'Ausgang', 'Ausgang-Grund',
+        'meine Farbe', 'mein Elo', 'Gegner Elo', 'Gegner-Name',
+        'Meine Genauigkeit', 'Gegner Genauigkeit', 'Link'
+    ]]
 
 
 
@@ -535,11 +536,6 @@ st.subheader("Der Datensatz")
 st.dataframe(filter_dataframe(df))
 
 
-st.subheader('Statistik numerischer Daten')
-
-st.dataframe(df.describe().applymap(lambda x: f"{x:0.2f}"))
-
-
 st.subheader('Anzahl Spiele über die Jahre')
 
 col1, col2, col3, col4 = st.columns(4)
@@ -594,18 +590,22 @@ st.subheader('Wann ich spiele')
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric(
-    label='Tage seit erstem Spiel',
-    value= (max(df['Datum'])-min(df['Datum'])).days
+    label='Jahre seit erstem Spiel',
+    value= str(round((pd.to_datetime(max(df['Datum']))-pd.to_datetime(min(df['Datum']))).days/365.25,1)).replace('.',',')
 )
 
 col2.metric(
     label='Tage mit min. einem Spiel',
-    value= "{:.0%}".format(int( len( pd.to_datetime(df['Datum']).apply(lambda x: x.date()).unique() ) ) / (max(df['Datum'])-min(df['Datum'])).days)
+    value= "{:.0%}".format(
+        int(len(
+            pd.to_datetime(df['Datum']).apply(lambda x: x.date()).unique() ) ) / 
+            (pd.to_datetime(max(df['Datum']))-pd.to_datetime(min(df['Datum']))).days
+        )
 )
 
 col3.metric(
     label='Spiele/Tag',
-    value= str( round( len(df) / (max(df['Datum'])-min(df['Datum'])).days , 2)).replace('.',',')
+    value= str( round( len(df) / (pd.to_datetime(max(df['Datum']))-pd.to_datetime(min(df['Datum']))).days , 2)).replace('.',',')
 )
 
 col4.metric(
@@ -613,16 +613,25 @@ col4.metric(
     value= str( round(len(df) / int( len( pd.to_datetime(df['Datum']).apply(lambda x: x.date()).unique() ) ), 2)).replace('.',',')
 )
 
+
+# Convert string column to datetime.time
+def str_to_time(time_str):
+  return datetime.strptime(time_str, '%H:%M:%S').time()
+
+# Apply the function to the column
+df['Uhrzeit'] = df['Uhrzeit'].apply(str_to_time).apply(lambda x: datetime.combine(datetime(1998, 11, 2), x))
+
+
 fig = px.histogram(
     df, 
-    x ='Uhrzeit',
+    x = df['Uhrzeit'],
     title='im Tagesverlauf'
     )
 fig.update_layout(
-    yaxis_title="Anzahl Spiele" 
+    yaxis_title="Anzahl Spiele",
+    xaxis_title="Uhrzeit"
 )
 st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
-
 
 fig = px.histogram(
     df, 
@@ -722,14 +731,17 @@ fig.for_each_trace(lambda trace: trace.update(visible="legendonly")
 st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
 
 
-st.subheader('Dynamische Visualisierungen')
+st.subheader('Numerische Variablen')
 
 
-num_feat = st.selectbox(
+colx1, colx2 = st.columns(2)
+num_feat = colx1.radio(
     'Wähle numerische Variable', 
-    df.select_dtypes('number').columns)
+    df.select_dtypes('number').columns,
+    horizontal=True
+    )
 
-angezeigteWerte2 = st.radio(
+angezeigteWerte2 = colx2.radio(
     "Werte  ",
     ('Absolut', 'Relativ'),
     horizontal=True
@@ -739,6 +751,9 @@ if angezeigteWerte2 == 'Absolut':
     _var_angezeigteWerte2 = ''
 else:
     _var_angezeigteWerte2 = 'percent'
+
+st.write('')
+col1, col2 = st.columns([2,1])
 
 fig = px.histogram(
     df, 
@@ -762,9 +777,21 @@ fig = px.histogram(
         },
     )
 fig.update_layout(
-    yaxis_title="Anzahl Spiele" 
+    yaxis_title="Anzahl Spiele",
+    legend=dict(
+        orientation="h",
+        yanchor="bottom",
+        y=1.02,
+        xanchor="right",
+        x=1
 )
-st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
+)
+col1.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
+
+
+st.subheader('Dynamische Variablen')
+
+col2.dataframe(df.describe().applymap(lambda x: f"{x:0.2f}"))
 
 
 
@@ -848,10 +875,48 @@ fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
 st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
 
 
-st.subheader('Gespielte Eröffnungen')
-
-df_eco = df
-st.write(df.groupby(['ECO', 'meine Farbe'])['ECO'].agg(['count']).sort_values(by='count', ascending=False))
 
 
-st.write(df.columns)
+st.subheader('Einfluss der Farbe auf das Spiel')
+
+
+col1, col2, col3, col4 = st.columns(4)
+col1.metric(
+    'Anzahl Spiele mit Weiß',
+    len(df[ (df['meine Farbe']=='Weiß') ].index)
+    )
+col2.metric(
+    'gewonnen',
+    "{:.0%}".format(len(df[ (df['meine Farbe']=='Weiß') ].loc[(df[ (df['meine Farbe']=='Weiß') ].Ausgang == "gewonnen")]) / len(df[ (df['meine Farbe']=='Weiß') ].index))
+    )
+col3.metric(
+    'unentschieden',
+    "{:.0%}".format(len(df[ (df['meine Farbe']=='Weiß') ].loc[(df[ (df['meine Farbe']=='Weiß') ].Ausgang == "unentschieden")]) / len(df[ (df['meine Farbe']=='Weiß') ].index))
+    )
+col4.metric(
+    'verloren',
+    "{:.0%}".format(len(df[ (df['meine Farbe']=='Weiß') ].loc[(df[ (df['meine Farbe']=='Weiß') ].Ausgang == "verloren")]) / len(df[ (df['meine Farbe']=='Weiß') ].index))
+    )
+
+
+col1, col2, col3, col4 = st.columns(4)
+col1.metric(
+    'Anzahl Spiele mit Schwarz',
+    len(df[ (df['meine Farbe']=='Schwarz') ].index)
+    )
+col2.metric(
+    'gewonnen',
+    "{:.0%}".format(len(df[ (df['meine Farbe']=='Schwarz') ].loc[(df[ (df['meine Farbe']=='Schwarz') ].Ausgang == "gewonnen")]) / len(df[ (df['meine Farbe']=='Schwarz') ].index))
+    )
+col3.metric(
+    'unentschieden',
+    "{:.0%}".format(len(df[ (df['meine Farbe']=='Schwarz') ].loc[(df[ (df['meine Farbe']=='Schwarz') ].Ausgang == "unentschieden")]) / len(df[ (df['meine Farbe']=='Schwarz') ].index))
+    )
+col4.metric(
+    'verloren',
+    "{:.0%}".format(len(df[ (df['meine Farbe']=='Schwarz') ].loc[(df[ (df['meine Farbe']=='Schwarz') ].Ausgang == "verloren")]) / len(df[ (df['meine Farbe']=='Schwarz') ].index))
+    )
+
+
+
+st.caption('Mit liebe gebaut von [Özgün Cakir](https://www.özgüncakir.de), siehe auch das zugehörige [GitHub-Repo](https://github.com/OezguenCakir/Schach-Streamlit)')
