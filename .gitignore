@@ -138,3 +138,5 @@ secrets.toml
 test2.ipynb
 output.xlsx
 .DS_Store
+main2.py
+mein_datenabzug.ipynb
