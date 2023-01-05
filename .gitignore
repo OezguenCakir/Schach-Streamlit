@@ -137,3 +137,4 @@ secrets.toml
 .streamlit
 test2.ipynb
 output.xlsx
+.DS_Store
