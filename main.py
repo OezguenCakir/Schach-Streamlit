@@ -345,11 +345,11 @@ def df_to_csv(df):
     return df.to_csv(index=False).encode('utf-8')
 
 def function_erstes():
-    erstes_datum = pd.to_datetime( min(df['Datum']) )
+    erstes_datum = min(df['Datum'])     #pd.to_datetime( min(df['Datum']))
     return erstes_datum
 
 def function_letztes():
-    letztes_datum = pd.to_datetime( max(df['Datum']) )
+    letztes_datum = max(df['Datum'])    #pd.to_datetime( max(df['Datum']) )
     return letztes_datum
 
 def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
@@ -492,8 +492,7 @@ with st.sidebar:
             max_value = pd.to_datetime( max(df['Datum']) ),
             value = (pd.to_datetime(min(df['Datum'])), pd.to_datetime(max(df['Datum'])) )
         )
-    df = df[ ( pd.to_datetime(df['Datum']) >= function_erstes() ) & (pd.to_datetime(df['Datum']) <= function_letztes() ) ]
-    
+    df = df[ ( pd.to_datetime(df['Datum']) >= pd.to_datetime(a_date[0]) ) & (pd.to_datetime(df['Datum']) <= pd.to_datetime(a_date[1]) ) ]
 
     st.subheader('Downloade deine Daten')
 
@@ -633,6 +632,7 @@ fig.update_layout(
 )
 st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
 
+
 fig = px.histogram(
     df, 
     x ='Wochentag', 
@@ -645,11 +645,15 @@ fig.update_layout(
 st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
 
 
-
+day_most_games =        df.groupby(['Wochentag']).size().sort_values(ascending=False).index[0]
+day_least_games =       df.groupby(['Wochentag']).size().sort_values(ascending=True).index[0]
+num_day_most_games =    df.groupby(['Wochentag']).size().sort_values(ascending=False)[0]
+num_day_least_games =   df.groupby(['Wochentag']).size().sort_values()[0]
+diff_day_games =        "{:.0%}".format((num_day_most_games-num_day_least_games)/num_day_least_games)
+st.caption('am häufigsten spielst du am ' + day_most_games + ' mit ' + diff_day_games + ' mehr Spielen als am ' + day_least_games + ' mit den wenigsten Spielen')
 
 st.subheader('Elo nach Spielen')
-
-
+st.write('Elo ist eine Kennzahl zur Bewertung der Spielstärke')
 
 radio_spielart = st.radio(
         "Spiel-Art",
@@ -729,6 +733,25 @@ fig.update_layout(
 fig.for_each_trace(lambda trace: trace.update(visible="legendonly") 
                    if trace.name in "Gegner Elo" else ())
 st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
+
+
+opp_won_highest_name =  df_elo.sort_values(by='Gegner Elo', ascending=False)['Gegner-Name'][df_elo['Ausgang']=='gewonnen'].iloc[0]
+opp_won_highest_elo =   df_elo.sort_values(by='Gegner Elo', ascending=False)['Gegner Elo'][df_elo['Ausgang']=='gewonnen'].iloc[0]
+opp_won_highest_link =  df_elo.sort_values(by='Gegner Elo', ascending=False)['Link'][df_elo['Ausgang']=='gewonnen'].iloc[0]
+opp_won_highest_datum = df_elo.sort_values(by='Gegner Elo', ascending=False)['Datum'][df_elo['Ausgang']=='gewonnen'].iloc[0]
+
+opp_lost_lowest_name =  df_elo.sort_values(by='Gegner Elo')['Gegner-Name'][df_elo['Ausgang']=='verloren'].iloc[0]
+opp_lost_lowest_elo =   df_elo.sort_values(by='Gegner Elo')['Gegner Elo'][df_elo['Ausgang']=='verloren'].iloc[0]
+opp_lost_lowest_link =  df_elo.sort_values(by='Gegner Elo')['Link'][df_elo['Ausgang']=='verloren'].iloc[0]
+opp_lost_lowest_datum =  df_elo.sort_values(by='Gegner Elo')['Datum'][df_elo['Ausgang']=='verloren'].iloc[0]
+
+col1, col2 = st.columns(2)
+col1.write('**👍 Höchster Elo gegen den du gewonnen hast:**')
+col1.write(opp_won_highest_name + ' mit einem Elo von ' + str(opp_won_highest_elo) + ' am ' + str(pd.to_datetime(opp_won_highest_datum).strftime('%d.%m.%Y'))
+    + ' [(zum Spiel)](' + opp_won_highest_link + ')')
+col2.write('**👎 Tiefster Elo gegen den du verloren hast:**')
+col2.write(opp_lost_lowest_name + ' mit einem Elo von ' + str(opp_lost_lowest_elo) + ' am ' + str(pd.to_datetime(opp_lost_lowest_datum).strftime('%d.%m.%Y'))
+    + ' [(zum Spiel)](' + opp_lost_lowest_link + ')')
 
 
 st.subheader('Numerische Variablen')
@@ -919,4 +942,4 @@ col4.metric(
 
 
 
-st.caption('Mit liebe gebaut von [Özgün Cakir](https://www.özgüncakir.de), siehe auch das zugehörige [GitHub-Repo](https://github.com/OezguenCakir/Schach-Streamlit)')
+st.caption('Mit Liebe gebaut von [Özgün Cakir](https://www.özgüncakir.de), siehe auch das zugehörige [GitHub-Repo](https://github.com/OezguenCakir/Schach-Streamlit)')
