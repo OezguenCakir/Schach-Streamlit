@@ -18,12 +18,14 @@ from pandas.api.types import (
 from io import BytesIO
 from pyxlsb import open_workbook as open_xlsb
 
+
 if "button_clicked" not in st.session_state:    
     st.session_state.button_clicked = False
 
 def callback():
     # Button wurde geklickt
     st.session_state.button_clicked = True
+
 
 @st.cache(suppress_st_warning=True, show_spinner=False, allow_output_mutation=True)
 def datenziehung(username):
@@ -159,7 +161,8 @@ def datenbearbeitung(df):
             df.accuracies.isna(),
             {},
             df.accuracies
-        )   
+        ) 
+
     df['Meine Genauigkeit'] = np.where(
         df.accuracies.isna(),
         {},
@@ -172,7 +175,7 @@ def datenbearbeitung(df):
         df['Meine Genauigkeit'].apply(lambda x: x.get('black'))   
     )
 
-    df['Meine Genauigkeit'] =["{:.2%}".format(x/100) for x in df['Meine Genauigkeit']]
+    df['Meine Genauigkeit'] =["{:.1%}".format(x/100) for x in df['Meine Genauigkeit']]
 
     df['Gegner Genauigkeit'] = np.where(
         df.accuracies.isna(),
@@ -186,7 +189,7 @@ def datenbearbeitung(df):
         df['Gegner Genauigkeit'].apply(lambda x: x.get('white'))   
     )
     
-    df['Gegner Genauigkeit'] =["{:.2%}".format(x/100) for x in df['Gegner Genauigkeit']]
+    df['Gegner Genauigkeit'] =["{:.1%}".format(x/100) for x in df['Gegner Genauigkeit']]
 
     ergebnis_mapping = {
         "checkmated":"Schachmatt",
@@ -300,11 +303,12 @@ def datenbearbeitung(df):
         'Datum','Uhrzeit','Wochentag', 'Spiel-Art', 'Zeit', 'Variante', 'Bewertet',
         'Ausgang', 'Ausgang-Grund',
         'meine Farbe', 'mein Elo', 'Gegner Elo', 'Gegner-Name',
-        'Meine Genauigkeit', 'Gegner Genauigkeit', 'Link'
+        'Meine Genauigkeit', 'Gegner Genauigkeit', 'Link', 'Anzahl Züge', 'Rest-Zeit'
     ]]
 
     df = df.sort_values('Datum', ascending=False).reset_index(drop=True)
     df.index = np.arange(1, len(df) + 1)
+    
 
     return df
 
@@ -859,3 +863,15 @@ col3.metric(
 
 
 st.caption('Mit Liebe gebaut von [Özgün Cakir](https://www.özgüncakir.de), siehe auch das zugehörige [GitHub-Repo](https://github.com/OezguenCakir/Schach-Streamlit)')
+
+num_games_measured = len(df[df['Meine Genauigkeit']!='nan%'])
+
+st.subheader(str(num_games_measured) + ' Spiele hat Chess.com bzgl. eurer Genauigkeit gemessen')
+
+st.caption('Dies misst die Übereinstimmung der gespielten Spielzüge mit Computer-berechneten Zügen')
+st.write(df[df['Meine Genauigkeit']!='nan%'])
+
+
+
+if st.button('Drück mich :)'):
+    st.balloons()
