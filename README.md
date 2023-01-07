@@ -5,3 +5,5 @@ Eine App um Daten aus Chess.com auszuwerten. Standardmäßig wird mein gecachter
  - Aufbau der Streamlit-App - `main.py`
  - Mein Datenabzug aus Chess.com gecacht - `meine_daten.csv`
  - `requirements.txt` für Deployment auf Streamlit
+
+Die Arbeit an diesem Projekt macht mir Spaß und dient gleichzeitig als Möglichkeit mich mit Python zu befassen. Damit sind insbesondere die Libraries Pandas, Plotly und Streamlit gemeint.
