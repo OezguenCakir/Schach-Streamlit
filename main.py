@@ -18,14 +18,9 @@ from pandas.api.types import (
 from io import BytesIO
 from pyxlsb import open_workbook as open_xlsb
 
-
-if "button_clicked" not in st.session_state:    
-    st.session_state.button_clicked = False
-
 def callback():
     # Button wurde geklickt
     st.session_state.button_clicked = True
-
 
 @st.cache(suppress_st_warning=True, show_spinner=False, allow_output_mutation=True)
 def datenziehung(username):
@@ -69,8 +64,7 @@ def datenbearbeitung(df):
             'start_time':'StartTime'
             }
 
-    df.rename(columns=dict,
-            inplace=True)
+    df.rename(columns=dict, inplace=True)
 
     df['meine Farbe'] = np.where(
         df['white'].apply(lambda x: x.get('username')) == text_input, 
@@ -147,6 +141,7 @@ def datenbearbeitung(df):
     }	
     
     df['Zeit']= df['TimeControl'].astype(str).map(time_control_mapping)
+
     import datetime
     df['End-Datum'] = df['EndTime'].apply(datetime.datetime.fromtimestamp)
 
@@ -298,17 +293,16 @@ def datenbearbeitung(df):
     
     df['Wochentag']= df['End-Datum'].apply(lambda time: time.dayofweek).map(wochentag_mapping)
 
-
     df = df[[
         'Datum','Uhrzeit','Wochentag', 'Spiel-Art', 'Zeit', 'Variante', 'Bewertet',
         'Ausgang', 'Ausgang-Grund',
         'meine Farbe', 'mein Elo', 'Gegner Elo', 'Gegner-Name',
-        'Meine Genauigkeit', 'Gegner Genauigkeit', 'Link', 'Anzahl Züge', 'Rest-Zeit'
+        'Meine Genauigkeit', 'Gegner Genauigkeit', 'Link'
     ]]
 
     df = df.sort_values('Datum', ascending=False).reset_index(drop=True)
+
     df.index = np.arange(1, len(df) + 1)
-    
 
     return df
 
@@ -425,6 +419,9 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 st.title('♟️ Chess.com Profil-Auswertung')
 
 
+if "button_clicked" not in st.session_state:    
+    st.session_state.button_clicked = False
+
 with st.form(key='my_form'):
 	text_input = st.text_input(label='**Gebe deinen Chess.com Usernamen ein**')
 	submit_button = st.form_submit_button(label='anfangen', on_click=callback)
@@ -436,6 +433,8 @@ if submit_button or st.session_state.button_clicked:
            
     st.success ("Alle Dateien wurden gespeichert ✅")
     df = datenbearbeitung(df)
+    if username == 'oezguen':
+        df.to_csv('meine_daten.csv')
     st.text('')   
 else:
     st.subheader('Oder schaue dir meine Daten an')
@@ -513,15 +512,14 @@ with st.sidebar:
 
 url = "https://api.chess.com/pub/player/" + username
 data = json.loads(urllib.request.urlopen(url).read())
-col1, col2 = st.columns([1,5])
 if data.get('avatar') == None:
     profile_pic = 'https://www.chess.com/bundles/web/images/user-image.007dad08.svg'
 else:
     profile_pic = data.get('avatar')
-
 joined_delta = date.today() - date.fromtimestamp(data.get('joined'))
 last_online_delta = date.today() - date.fromtimestamp(data.get('last_online'))
 
+col1, col2 = st.columns([1,5])
 col1.image(profile_pic, width=100)
 col2.write("[" + data.get('username') + "](" + data.get('url') + ")  \n" + data.get('name'))
 col2.caption("Follower: " + str(data.get('followers')))
@@ -816,10 +814,6 @@ col3.metric('längste Niederlagen-Serie', df_streak.loc['verloren'])
 
 
 
-
-
-
-
 st.subheader('Einfluss der Farbe auf das Spiel')
 
 
@@ -839,9 +833,6 @@ col3.metric(
     )
 
 
-
-
-
 col1, col2, col3 = st.columns(3)
 
 col1.metric(
@@ -859,11 +850,6 @@ col3.metric(
 
 
 
-
-
-
-st.caption('Mit Liebe gebaut von [Özgün Cakir](https://www.özgüncakir.de), siehe auch das zugehörige [GitHub-Repo](https://github.com/OezguenCakir/Schach-Streamlit)')
-
 num_games_measured = len(df[df['Meine Genauigkeit']!='nan%'])
 
 st.subheader(str(num_games_measured) + ' Spiele hat Chess.com bzgl. eurer Genauigkeit gemessen')
@@ -875,3 +861,5 @@ st.write(df[df['Meine Genauigkeit']!='nan%'])
 
 if st.button('Drück mich :)'):
     st.balloons()
+
+st.caption('Mit Liebe gebaut von [Özgün Cakir](https://www.özgüncakir.de), siehe auch das zugehörige [GitHub-Repo](https://github.com/OezguenCakir/Schach-Streamlit)')
