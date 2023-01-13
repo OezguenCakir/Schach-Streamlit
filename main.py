@@ -417,7 +417,7 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
 
 
 st.title('♟️ Chess.com Profil-Auswertung')
-
+st.image(image='https://raw.githubusercontent.com/OezguenCakir/Schach-Streamlit/main/pictures/banner.png')
 
 if "button_clicked" not in st.session_state:    
     st.session_state.button_clicked = False
