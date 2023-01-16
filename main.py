@@ -17,6 +17,8 @@ from pandas.api.types import (
 )
 from io import BytesIO
 from pyxlsb import open_workbook as open_xlsb
+import chess.pgn
+import io
 
 def callback():
     # Button wurde geklickt
@@ -26,8 +28,7 @@ def callback():
 def datenziehung(username):
     # Use of the API to download monthly archives
     baseUrl = "https://api.chess.com/pub/player/" + username + "/games/"
-
-    # read the archives url and store in a list
+    # Read the archives url and store in a list
     f = urllib.request.urlopen(baseUrl + "archives")
     archives = f.read().decode("utf-8")
     archives = archives.replace("{\"archives\":[\"", "\",\"")
@@ -57,7 +58,6 @@ def datenziehung(username):
 def datenbearbeitung(df):
     # Spalten-Titel umbennen
     dict = {'url': 'Link',
-            'pgn': 'PGN',
             'time_control': 'TimeControl',
             'end_time': 'EndTime',
             'rated':'Bewertet',
@@ -293,6 +293,8 @@ def datenbearbeitung(df):
     
     df['Wochentag']= df['End-Datum'].apply(lambda time: time.dayofweek).map(wochentag_mapping)
 
+    
+
     df = df[[
         'Datum','Uhrzeit','Wochentag', 'Spiel-Art', 'Zeit', 'Variante', 'Bewertet',
         'Ausgang', 'Ausgang-Grund',
@@ -414,30 +416,38 @@ def filter_dataframe(df: pd.DataFrame) -> pd.DataFrame:
                 df = df[df[column].isin(user_cat_input)]
     return df
 
+def str_to_time(time_str):
+  return datetime.strptime(time_str, '%H:%M:%S').time()
+
+def generate_streak_info(shots):
+    data = shots['Ausgang'].to_frame()
+    data['start_of_streak'] = data['Ausgang'].ne(data['Ausgang'].shift())
+    data['streak_id'] = data.start_of_streak.cumsum()
+    data['Serie'] = data.groupby('streak_id').cumcount() + 1
+    shots_with_streaks = pd.concat([shots, data['Serie']], axis=1)
+    return shots_with_streaks
 
 
+# ANFANG DER SEITE
 st.title('♟️ Chess.com Profil-Auswertung')
-st.image(image='https://raw.githubusercontent.com/OezguenCakir/Schach-Streamlit/main/pictures/banner.png')
+st.image(image='https://raw.githubusercontent.com/OezguenCakir/Schach-Streamlit/5defc3306b59236a6069ae01357c34d1cee3c7ec/pictures/banner.png')
 
 if "button_clicked" not in st.session_state:    
     st.session_state.button_clicked = False
 
 with st.form(key='my_form'):
-	text_input = st.text_input(label='**Gebe deinen Chess.com Usernamen ein**')
-	submit_button = st.form_submit_button(label='anfangen', on_click=callback)
+	text_input = st.text_input(label='**Gebe deinen Chess.com Usernamen ein oder schaue dir meine Daten an**')
+	submit_button = st.form_submit_button(label='Profil auswerten', on_click=callback)
 if submit_button or st.session_state.button_clicked:
     username = text_input.lower()
-
-    st.markdown('**Daten aus Chess.com werden gespeichert**')  
+    st.write('**Daten aus Chess.com werden gespeichert**')  
     df = datenziehung(username)
-           
     st.success ("Alle Dateien wurden gespeichert ✅")
     df = datenbearbeitung(df)
-    if username == 'oezguen':
-        df.to_csv('meine_daten.csv')
+    #if username == 'oezguen':
+    #    df.to_csv('meine_daten.csv')
     st.text('')   
 else:
-    st.subheader('Oder schaue dir meine Daten an')
     username = 'oezguen'
     text_input = 'oezguen'
     df = pd.read_csv('meine_daten.csv')
@@ -449,24 +459,17 @@ else:
         'Meine Genauigkeit', 'Gegner Genauigkeit', 'Link'
     ]]
 
-
+# SEITENLEISTE
 with st.sidebar:
     st.subheader('Filter')
 
-    radio_spielart = st.radio(
-        "Spiel-Art",
-        ("nur klassisches Schach", "alle Varianten"),
-        help='es gibt besondere Varianten mit unterschiedlichen Zielen. Dieser Filter blendet diese aus'
-    )
+    radio_spielart = st.radio( "Spiel-Art", ("nur klassisches Schach", "alle Varianten"), help='es gibt besondere Varianten mit unterschiedlichen Zielen. Dieser Filter blendet diese aus' )
     if radio_spielart == 'nur klassisches Schach':
         df = df[ (df.Variante=='klassisch') ]
     else:
         df = df
     
-    radio_farbe = st.radio(
-        "Meine Farbe",
-        ("Alle", "Weiß", "Schwarz")
-    )
+    radio_farbe = st.radio( "Meine Farbe", ("Alle", "Weiß", "Schwarz") )
     if radio_farbe == 'Alle':
         df = df
     elif radio_farbe == 'Schwarz':
@@ -474,10 +477,7 @@ with st.sidebar:
     elif radio_farbe == 'Weiß':
         df = df[ (df['meine Farbe']=='Weiß') ]
 
-    radio_ausgang = st.radio(
-        "Ausgang",
-        ("Alle", "gewonnen", "unentschieden", "verloren")
-    )
+    radio_ausgang = st.radio( "Ausgang", ("Alle", "gewonnen", "unentschieden", "verloren") )
     if radio_ausgang == 'gewonnen':
         df = df[ (df['Ausgang']=='gewonnen') ]
     elif radio_ausgang == 'unentschieden':
@@ -495,21 +495,13 @@ with st.sidebar:
         )
     df = df[ ( pd.to_datetime(df['Datum']) >= pd.to_datetime(a_date[0]) ) & (pd.to_datetime(df['Datum']) <= pd.to_datetime(a_date[1]) ) ]
 
+
     st.subheader('Downloade deine Daten')
 
-    st.download_button(
-        label='📥 Excel-Datei',
-        data=df_to_excel(df) ,
-        file_name= 'chess_com_daten.xlsx')
+    st.download_button( label='📥 Excel-Datei', data=df_to_excel(df), file_name= 'chess_com_daten.xlsx' )
+    st.download_button( label="📥 CSV-Datei", data=df_to_csv(df), file_name="chess_com_daten.csv", mime="text/csv")
 
-    st.download_button(
-        "📥 CSV-Datei",
-        df_to_csv(df),
-        "chess_com_daten.csv",
-        "text/csv"
-        )
-
-
+## PROFIL
 url = "https://api.chess.com/pub/player/" + username
 data = json.loads(urllib.request.urlopen(url).read())
 if data.get('avatar') == None:
@@ -527,18 +519,14 @@ col2.caption(
     "Zuletzt online am " + time.strftime('%d.%m.%Y um %H:%M:%S', time.localtime(data.get('last_online'))) + 
      " *- vor *" + str(round(last_online_delta.days,1)).replace(".",",") + '* Tagen*' + "  \n" + 
     "Registriert am " + time.strftime('%d.%m.%Y um %H:%M:%S', time.localtime(data.get('joined'))) +
-    " *- vor *" + str(round(joined_delta.days/365.25,1)).replace(".",",") + '* Jahren*'
-    )
+    " *- vor *" + str(round(joined_delta.days/365.25,1)).replace(".",",") + '* Jahren*')
 
-
+# DER DATENSATZ
 st.header("Der Datensatz")
 st.dataframe(filter_dataframe(df.drop(columns=['Meine Genauigkeit', 'Gegner Genauigkeit'])))
 
 
-
-
-
-
+# AUSGANG DER SPIELE
 st.header('Ausgang der Spiele')
 col1, col2, col3, col4 = st.columns(4)
 col1.metric( 'Anzahl Spiele insgesamt', len(df.index) )
@@ -553,27 +541,24 @@ fig = px.sunburst(
     color_discrete_map={
         "gewonnen": "#007B57",
         "unentschieden": "grey",
-        "verloren": "#9d2e00"
-        }
-    )
+        "verloren": "#9d2e00"})
 fig.for_each_annotation(lambda a: a.update(text=a.text.split("=")[-1]))
 fig.update_traces(hovertemplate="%{label}: %{value} Spiele<extra></extra>")
 st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
-
 st.caption('Klick in den inneren Kreis und sieh was passiert')
 
 
-
+## ELO
 st.subheader('Elo nach Spielen')
 st.caption('Elo ist eine Kennzahl zur Bewertung der Spielstärke')
 
 radio_spielart = st.radio(
-        "Spiel-Art",
-        ("Bullet", "Blitz", "Schnellschach", "Täglich"),
-        horizontal=True,
-        help='Dieser Filter wirkt nur auf diese Visualisierung ein',
-        index=2
-    )
+    "Spiel-Art",
+    ("Bullet", "Blitz", "Schnellschach", "Täglich"),
+    horizontal=True,
+    help='Dieser Filter wirkt nur auf diese Visualisierung ein',
+    index=2)
+
 if radio_spielart == 'Bullet':
     df_elo = df[ (df['Spiel-Art']=='Bullet') ].sort_values('Datum').reset_index(drop=True)
 elif radio_spielart == 'Blitz':
@@ -625,18 +610,14 @@ col2.metric( label= 'höchster Elo', value= max_elo, delta= max_delta, help= 'Da
 col3.metric( label= 'tiefster Elo', value= min_elo, delta= min_delta, help= 'Das Delta wird zum aktuellen Elo gebildet' )
 col4.metric( label= 'Ø Elo', value= avg_elo, delta= "{:.0%}".format( (letzter_elo - avg_elo ) / avg_elo ), help= 'Das Delta wird zum aktuellen Elo gebildet')
 
-fig = px.line(
-    df_elo,
-    y=["Gegner Elo", "mein Elo"], 
-    title='Elo nach Spiel-Art'
-    )
+fig = px.line( df_elo, y=["Gegner Elo", "mein Elo"], title='Elo nach Spiel-Art' )
 fig.update_layout(
     yaxis_title="Elo",
     xaxis_title="nach Spielen",
     legend_traceorder="reversed",
-    legend_title_text='Elo'
+    legend_title_text='Elo',
+    hovermode='x unified'
 )
-fig.update_layout(hovermode='x unified')
 fig.update_traces(hovertemplate="%{y} Elo<extra></extra>")
 fig.for_each_trace(lambda trace: trace.update(visible="legendonly") if trace.name in "Gegner Elo" else ())
 st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
@@ -645,7 +626,6 @@ opp_won_highest_name =  df_elo.sort_values(by='Gegner Elo', ascending=False)['Ge
 opp_won_highest_elo =   df_elo.sort_values(by='Gegner Elo', ascending=False)['Gegner Elo'][df_elo['Ausgang']=='gewonnen'].iloc[0]
 opp_won_highest_link =  df_elo.sort_values(by='Gegner Elo', ascending=False)['Link'][df_elo['Ausgang']=='gewonnen'].iloc[0]
 opp_won_highest_datum = df_elo.sort_values(by='Gegner Elo', ascending=False)['Datum'][df_elo['Ausgang']=='gewonnen'].iloc[0]
-
 opp_lost_lowest_name =  df_elo.sort_values(by='Gegner Elo')['Gegner-Name'][df_elo['Ausgang']=='verloren'].iloc[0]
 opp_lost_lowest_elo =   df_elo.sort_values(by='Gegner Elo')['Gegner Elo'][df_elo['Ausgang']=='verloren'].iloc[0]
 opp_lost_lowest_link =  df_elo.sort_values(by='Gegner Elo')['Link'][df_elo['Ausgang']=='verloren'].iloc[0]
@@ -660,103 +640,98 @@ col2.write(opp_lost_lowest_name + ' mit einem Elo von ' + str(opp_lost_lowest_el
     + ' [(zum Spiel)](' + opp_lost_lowest_link + ')')
 
 
-
-
-
-
-
-
-
-
+# SPIELVOLUMEN IM ZEITVERLAUF
 st.header('Spielvolumen im Zeitverlauf')
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric(
     label='Jahre seit erstem Spiel',
-    value= str(round((pd.to_datetime(max(df['Datum']))-pd.to_datetime(min(df['Datum']))).days/365.25,1)).replace('.',',')
-)
+    value= str(round((pd.to_datetime(max(df['Datum']))-pd.to_datetime(min(df['Datum']))).days/365.25,1)).replace('.',','))
 col2.metric(
     label='Tage mit min. einem Spiel',
     value= "{:.0%}".format(
-        int(len(
-            pd.to_datetime(df['Datum']).apply(lambda x: x.date()).unique() ) ) / 
-            (pd.to_datetime(max(df['Datum']))-pd.to_datetime(min(df['Datum']))).days
-        )
-)
+        int(len( pd.to_datetime(df['Datum']).apply(lambda x: x.date()).unique() ) ) / 
+            (pd.to_datetime(max(df['Datum']))-pd.to_datetime(min(df['Datum']))).days))
 col3.metric(
     label='Spiele/Tag',
-    value= str( round( len(df) / (pd.to_datetime(max(df['Datum']))-pd.to_datetime(min(df['Datum']))).days , 2)).replace('.',',')
-)
+    value= str( round( len(df) / (pd.to_datetime(max(df['Datum']))-pd.to_datetime(min(df['Datum']))).days , 2)).replace('.',','))
 col4.metric(
     label='Spiele/Tag (min. ein Spiel)',
-    value= str( round(len(df) / int( len( pd.to_datetime(df['Datum']).apply(lambda x: x.date()).unique() ) ), 2)).replace('.',',')
-)
+    value= str( round(len(df) / int( len( pd.to_datetime(df['Datum']).apply(lambda x: x.date()).unique() ) ), 2)).replace('.',','))
 
-fig = px.histogram(
-    df, 
-    x ='Datum',
-    title='im gesamten Zeitverlauf'
-    )
+fig = px.histogram( df, x ='Datum', title='im gesamten Zeitverlauf' )
 fig.update_layout(yaxis_title="Anzahl Spiele")
 fig.update_layout(hovermode='x unified')
 fig.update_traces(hovertemplate="%{y} Spiele<extra></extra>")
 st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
 
 
-fig = px.histogram(
-    df, 
-    x ='Wochentag', 
-    category_orders={"Wochentag":["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]},
-    title='im Wochenverlauf'
-    )
-fig.update_layout(
-    yaxis_title="Anzahl Spiele" 
-)
-fig.update_traces(hovertemplate="%{y} Spiele<extra></extra>")
-st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
 
+most_games_day = df.groupby(['Datum']).size().sort_values(ascending=False)
 
-# Convert string column to datetime.time
-def str_to_time(time_str):
-  return datetime.strptime(time_str, '%H:%M:%S').time()
+try: 
+    most_games_date = str(most_games_day.index[0].strftime("%d.%m.%Y"))
+except Exception:
+    most_games_date = most_games_day.index[0]
 
-# Apply the function to the column
-df['Uhrzeit'] = df['Uhrzeit'].apply(str_to_time).apply(lambda x: datetime.combine(datetime(1998, 11, 2), x))
+st.info('Mit ' + str(most_games_day[0]) + ' Spielen hast du am ' + most_games_date + ' die meisten Spiele an einem Tag gespielt')
 
-
-fig = px.histogram(
-    df, 
-    x = df['Uhrzeit'],
-    title='im Tagesverlauf'
-    )
-fig.update_layout(
-    yaxis_title="Anzahl Spiele",
-    xaxis_title="Uhrzeit"
-)
-fig.update_layout(hovermode='x unified')
-fig.update_traces(hovertemplate="%{y} Spiele<extra></extra>")
-st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
 
 day_most_games =        df.groupby(['Wochentag']).size().sort_values(ascending=False).index[0]
 day_least_games =       df.groupby(['Wochentag']).size().sort_values(ascending=True).index[0]
 num_day_most_games =    df.groupby(['Wochentag']).size().sort_values(ascending=False)[0]
 num_day_least_games =   df.groupby(['Wochentag']).size().sort_values()[0]
 diff_day_games =        "{:.0%}".format((num_day_most_games-num_day_least_games)/num_day_least_games)
-st.caption('am häufigsten spielst du am ' + day_most_games + ' mit ' + diff_day_games + ' mehr Spielen als am ' + day_least_games + ' mit den wenigsten Spielen')
+
+fig = px.histogram(
+    df, 
+    x ='Wochentag', 
+    category_orders={"Wochentag":["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]},
+    title='im Wochenverlauf' )
+fig.update_layout( yaxis_title="Anzahl Spiele" )
+fig.update_traces(hovertemplate="%{y} Spiele<extra></extra>")
+st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
+
+st.info(day_most_games + 's spielst du am häufigsten  mit ' + diff_day_games + ' mehr Spielen als ' + day_least_games + 's')
 
 
+df['Uhrzeit'] = df['Uhrzeit'].apply(str_to_time).apply(lambda x: datetime.combine(datetime(1998, 11, 2), x))
+fig = px.histogram( df, x = df['Uhrzeit'], title='im Tagesverlauf' )
+fig.update_layout( yaxis_title="Anzahl Spiele", xaxis_title="Uhrzeit", hovermode='x unified' )
+fig.update_traces(hovertemplate="%{y} Spiele<extra></extra>")
+st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
 
+# define the bins
+bins = [
+    -10, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 
+    6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10, 10.5, 
+    11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15, 15.5, 
+    16, 16.5, 17, 17.5, 18, 18.5, 19, 19.5, 20, 20.5, 21.5, 22, 22.5, 23, 23.5, 24]
+
+# add custom labels if desired
+labels = [
+    '00:00-00:29', '00:30-00:59', '01:00-01:29', '01:30-01:59', '02:00-02:29', '02:30-02:59', '03:00-03:29', '03:30;03:59', 
+    '04:00-04:29', '04:30-04:59', '05:00-05:29', '05:30-05:59', '06:00-06:29', '06:30-06:59', '07:00-07:29', '07:30-07:59', 
+    '08:00-08:29', '08:30-08:59', '09:00-09:29', '09:30-09:59', '10:00-10:29', '10:30-10:59', '11:00-11:29', '11:30-11:59', 
+    '12:00-12:29', '12:30-12:59', '13:00:13:29', '13:30-13:59', '14:00-14:29', '14:30-14:59', '15:00-15:29', '15:30-15:59', 
+    '16:00-16:29', '16:30-16:59', '17:00-17:29', '17:30-17:59', '18:00-18:29', '18:30-18:59', '19:00-19:29', '19:30-19:59',
+    '20:00-20:29', '20:30-20:59', '21:00-21:29', '21:30-21:59', '22:00-22:29', '22:30-22:59', '23:00-23:29', '23:30-23:59'
+    ]
+
+# add the bins to the dataframe
+df_time = df
+df_time['Time Bin'] = pd.cut(df_time['Uhrzeit'].apply(lambda x: x.hour + x.minute/60), bins, labels=labels, right=False)
+df_time = df_time.groupby('Time Bin').count()['Datum'].sort_values(ascending=False)
+
+st.info('Zwischen ' + df_time.index.values[0] + ' spielst du am häufigsten mit ' + "{:.1%}".format(df_time.iloc[0]/len(df)).replace('.',',') + ' deiner Spiele')
+
+
+# DYNAMISCHE VISUALISIERUNGEN
 st.subheader('Dynamische Visualisierungen')
 
-cat_feat = st.selectbox(
-    'Wähle kategorische Variable', 
-    df.select_dtypes(exclude = 'number').columns)
+cat_feat = st.selectbox( 'Wähle kategorische Variable', df.select_dtypes(exclude = 'number').columns)
 
-angezeigteWerte3 = st.radio(
-    "Werte",
-    ('Absolut', 'Relativ'),
-    horizontal=True
-    )
+angezeigteWerte3 = st.radio( "Werte", ('Absolut', 'Relativ'), horizontal=True )
 
 if angezeigteWerte3 == 'Absolut':
     _var_angezeigteWerte3 = ''
@@ -780,13 +755,8 @@ fig = px.histogram(
             "20 Sek. | 1", "30 Sek.", "1 Minute", "1 | 1", "2 | 1", 
             "3 Minuten", "3 | 2", "5 Minuten", "5 | 5",
             "10 Minuten", "10 | 5", "10 | 10", "15 Minuten", "15 | 5", "15 | 10", "15 | 15", "20 Minuten", "30 Minuten",
-            "1 Tag", "2 Tage", "3 Tage", "7 Tage"
-            ]
-        },
-    )
-fig.update_layout(
-    yaxis_title="Anzahl Spiele" 
-)
+            "1 Tag", "2 Tage", "3 Tage", "7 Tage" ] }, )
+fig.update_layout( yaxis_title="Anzahl Spiele" )
 st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
 
 
@@ -794,14 +764,6 @@ st.plotly_chart(fig, use_container_width=True, config= {'displaylogo': False})
 st.subheader('Ausgang meiner Spiele')
 
 streaks = pd.Series(df.Ausgang, name='Ausgang').to_frame()
-
-def generate_streak_info(shots):
-    data = shots['Ausgang'].to_frame()
-    data['start_of_streak'] = data['Ausgang'].ne(data['Ausgang'].shift())
-    data['streak_id'] = data.start_of_streak.cumsum()
-    data['Serie'] = data.groupby('streak_id').cumcount() + 1
-    shots_with_streaks = pd.concat([shots, data['Serie']], axis=1)
-    return shots_with_streaks
 
 shots = streaks['Ausgang'].to_frame()
 generate_streak_info(shots).groupby(by="Ausgang").max()
@@ -813,7 +775,7 @@ col2.metric('längste Unentschieden-Serie', df_streak.loc['unentschieden'])
 col3.metric('längste Niederlagen-Serie', df_streak.loc['verloren'])
 
 
-
+# EINFLUSS DER FARBE
 st.subheader('Einfluss der Farbe auf das Spiel')
 
 
@@ -821,45 +783,40 @@ col1, col2, col3 = st.columns(3)
 
 col1.metric(
     'gewonnen',
-    "{:.0%}".format(len(df[ (df['meine Farbe']=='Weiß') ].loc[(df[ (df['meine Farbe']=='Weiß') ].Ausgang == "gewonnen")]) / len(df[ (df['meine Farbe']=='Weiß') ].index))
-    )
+    "{:.0%}".format(len(df[ (df['meine Farbe']=='Weiß') ].loc[(df[ (df['meine Farbe']=='Weiß') ].Ausgang == "gewonnen")]) / len(df[ (df['meine Farbe']=='Weiß') ].index)))
 col2.metric(
     'unentschieden',
-    "{:.0%}".format(len(df[ (df['meine Farbe']=='Weiß') ].loc[(df[ (df['meine Farbe']=='Weiß') ].Ausgang == "unentschieden")]) / len(df[ (df['meine Farbe']=='Weiß') ].index))
-    )
+    "{:.0%}".format(len(df[ (df['meine Farbe']=='Weiß') ].loc[(df[ (df['meine Farbe']=='Weiß') ].Ausgang == "unentschieden")]) / len(df[ (df['meine Farbe']=='Weiß') ].index)))
 col3.metric(
     'verloren',
-    "{:.0%}".format(len(df[ (df['meine Farbe']=='Weiß') ].loc[(df[ (df['meine Farbe']=='Weiß') ].Ausgang == "verloren")]) / len(df[ (df['meine Farbe']=='Weiß') ].index))
-    )
+    "{:.0%}".format(len(df[ (df['meine Farbe']=='Weiß') ].loc[(df[ (df['meine Farbe']=='Weiß') ].Ausgang == "verloren")]) / len(df[ (df['meine Farbe']=='Weiß') ].index)))
 
 
 col1, col2, col3 = st.columns(3)
 
 col1.metric(
     'gewonnen',
-    "{:.0%}".format(len(df[ (df['meine Farbe']=='Schwarz') ].loc[(df[ (df['meine Farbe']=='Schwarz') ].Ausgang == "gewonnen")]) / len(df[ (df['meine Farbe']=='Schwarz') ].index))
-    )
+    "{:.0%}".format(len(df[ (df['meine Farbe']=='Schwarz') ].loc[(df[ (df['meine Farbe']=='Schwarz') ].Ausgang == "gewonnen")]) / len(df[ (df['meine Farbe']=='Schwarz') ].index)))
 col2.metric(
     'unentschieden',
-    "{:.0%}".format(len(df[ (df['meine Farbe']=='Schwarz') ].loc[(df[ (df['meine Farbe']=='Schwarz') ].Ausgang == "unentschieden")]) / len(df[ (df['meine Farbe']=='Schwarz') ].index))
-    )
+    "{:.0%}".format(len(df[ (df['meine Farbe']=='Schwarz') ].loc[(df[ (df['meine Farbe']=='Schwarz') ].Ausgang == "unentschieden")]) / len(df[ (df['meine Farbe']=='Schwarz') ].index)))
 col3.metric(
     'verloren',
-    "{:.0%}".format(len(df[ (df['meine Farbe']=='Schwarz') ].loc[(df[ (df['meine Farbe']=='Schwarz') ].Ausgang == "verloren")]) / len(df[ (df['meine Farbe']=='Schwarz') ].index))
-    )
+    "{:.0%}".format(len(df[ (df['meine Farbe']=='Schwarz') ].loc[(df[ (df['meine Farbe']=='Schwarz') ].Ausgang == "verloren")]) / len(df[ (df['meine Farbe']=='Schwarz') ].index)))
 
 
-
+# GENAUIGKEIT
 num_games_measured = len(df[df['Meine Genauigkeit']!='nan%'])
-
 st.subheader(str(num_games_measured) + ' Spiele hat Chess.com bzgl. eurer Genauigkeit gemessen')
-
 st.caption('Dies misst die Übereinstimmung der gespielten Spielzüge mit Computer-berechneten Zügen')
+
 st.write(df[df['Meine Genauigkeit']!='nan%'])
 
 
-
+# BALOONS
 if st.button('Drück mich :)'):
     st.balloons()
 
+
+# FOOTER
 st.caption('Mit Liebe gebaut von [Özgün Cakir](https://www.özgüncakir.de), siehe auch das zugehörige [GitHub-Repo](https://github.com/OezguenCakir/Schach-Streamlit)')
